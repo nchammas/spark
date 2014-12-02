@@ -21,6 +21,7 @@ import scala.collection.JavaConversions._
 import sbt._
 import sbt.Classpaths.publishTask
 import sbt.Keys._
+import sbt.Tests._
 import sbtunidoc.Plugin.genjavadocSettings
 import sbtunidoc.Plugin.UnidocKeys.unidocGenjavadocVersion
 import com.typesafe.sbt.pom.{PomBuild, SbtPomKeys}
@@ -379,9 +380,37 @@ object Unidoc {
 object TestSettings {
   import BuildCommons._
 
+  def singleTests(tests: Seq[TestDefinition]) =
+    tests map { test =>
+      new Group(
+        name = test.name,
+        tests = Seq(test),
+        runPolicy = SubProcess(javaOptions = Seq.empty[String]))
+    }
+
+  def singleForkedTests(tests: Seq[TestDefinition], javaOptions: Seq[String]) =
+    tests map { test =>
+      new Group(
+        name = test.name,
+        tests = Seq(test),
+        runPolicy = SubProcess(javaOptions = javaOptions))
+    }
+
+  def groupBySuite(tests: Seq[TestDefinition], javaOptions: Seq[String]) = {
+    tests groupBy (_.name.split('.').slice(0,4).mkString(".")) map {
+      case (suite, tests) =>
+        new Group(
+          name = suite,
+          tests = tests,
+          // runPolicy = Tests.InProcess)
+          runPolicy = SubProcess(javaOptions = javaOptions))
+    } toSeq
+  }
+
   lazy val settings = Seq (
     // Fork new JVMs for tests and set Java options for those
     fork := true,
+
     javaOptions in Test += "-Dspark.test.home=" + sparkHome,
     javaOptions in Test += "-Dspark.testing=1",
     javaOptions in Test += "-Dspark.port.maxRetries=100",
@@ -403,9 +432,16 @@ object TestSettings {
     testOptions += Tests.Argument(TestFrameworks.JUnit, "-v", "-a"),
     // Enable Junit testing.
     libraryDependencies += "com.novocode" % "junit-interface" % "0.9" % "test",
-    // Only allow one test at a time, even across projects, since they run in the same JVM
-    parallelExecution in Test := false,
-    concurrentRestrictions in Global += Tags.limit(Tags.Test, 1),
+
+    // Parallelize execution of tests
+    parallelExecution in Test := true,
+    testForkedParallel in Test := false,
+    concurrentRestrictions in Test += Tags.limit(Tags.ForkedTestGroup, 8),
+    testGrouping in Test <<= (definedTests in Test, javaOptions in Test) map groupBySuite,
+    // testGrouping in Test <<= definedTests in Test map singleTests,
+    // testGrouping in Test <<= (definedTests in Test, javaOptions in Test) map singleForkedTests,
+    logBuffered in Test := true,
+
     // Remove certain packages from Scaladoc
     scalacOptions in (Compile, doc) := Seq(
       "-groups",
