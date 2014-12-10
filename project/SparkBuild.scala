@@ -397,6 +397,7 @@ object TestSettings {
     }
 
   def groupBySuite(tests: Seq[TestDefinition], javaOptions: Seq[String]) = {
+    // println(javaOptions.mkString("\n"))
     tests groupBy (_.name.split('.').slice(0,4).mkString(".")) map {
       case (suite, tests) =>
         new Group(
@@ -409,7 +410,7 @@ object TestSettings {
 
   lazy val settings = Seq (
     // Fork new JVMs for tests and set Java options for those
-    fork := true,
+    fork in Test := true,
 
     javaOptions in Test += "-Dspark.test.home=" + sparkHome,
     javaOptions in Test += "-Dspark.testing=1",
@@ -437,7 +438,27 @@ object TestSettings {
     parallelExecution in Test := true,
     testForkedParallel in Test := false,
     concurrentRestrictions in Test += Tags.limit(Tags.ForkedTestGroup, 8),
+
     testGrouping in Test <<= (definedTests in Test, javaOptions in Test) map groupBySuite,
+    testGrouping in Test := {
+      val original: Seq[Tests.Group] = (testGrouping in Test).value
+
+      original.map { group =>
+        val forkOptions = ForkOptions(
+          bootJars = Nil,
+          javaHome = javaHome.value,
+          connectInput = connectInput.value,
+          outputStrategy = outputStrategy.value,
+          runJVMOptions = javaOptions.value,
+          // workingDirectory = Some(new File(System.getProperty("user.dir"))),
+          workingDirectory = Some(baseDirectory.value),
+          envVars = envVars.value
+        )
+
+        group.copy(runPolicy = Tests.SubProcess(forkOptions))
+      }
+    },
+    // testGrouping in Test <<= (definedTests in Test, javaOptions in Test) map groupBySuite,
     // testGrouping in Test <<= definedTests in Test map singleTests,
     // testGrouping in Test <<= (definedTests in Test, javaOptions in Test) map singleForkedTests,
     logBuffered in Test := true,
