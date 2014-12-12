@@ -398,7 +398,7 @@ object TestSettings {
 
   def groupBySuite(tests: Seq[TestDefinition], javaOptions: Seq[String]) = {
     // println(javaOptions.mkString("\n"))
-    tests groupBy (_.name.split('.').slice(0,6).mkString(".")) map {
+    tests groupBy (_.name.split('.').slice(0,5).mkString(".")) map {
       case (suite, tests) =>
         new Group(
           name = suite,
