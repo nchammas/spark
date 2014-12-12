@@ -398,7 +398,7 @@ object TestSettings {
 
   def groupBySuite(tests: Seq[TestDefinition], javaOptions: Seq[String]) = {
     // println(javaOptions.mkString("\n"))
-    tests groupBy (_.name.split('.').slice(0,4).mkString(".")) map {
+    tests groupBy (_.name.split('.').slice(0,6).mkString(".")) map {
       case (suite, tests) =>
         new Group(
           name = suite,
@@ -417,7 +417,7 @@ object TestSettings {
     javaOptions in Test += "-Dspark.port.maxRetries=100",
     javaOptions in Test += "-Dspark.ui.enabled=false",
     javaOptions in Test += "-Dspark.ui.showConsoleProgress=false",
-    javaOptions in Test += "-Dspark.driver.allowMultipleContexts=true",
+    javaOptions in Test += "-Dspark.driver.allowMultipleContexts=false",
     javaOptions in Test += "-Dsun.io.serialization.extendedDebugInfo=true",
     javaOptions in Test ++= System.getProperties.filter(_._1 startsWith "spark")
       .map { case (k,v) => s"-D$k=$v" }.toSeq,
@@ -427,7 +427,9 @@ object TestSettings {
     javaOptions in Test +=
       "-Dspark.executor.extraClassPath=" + (fullClasspath in Test).value.files.
       map(_.getAbsolutePath).mkString(":").stripSuffix(":"),
+
     javaOptions += "-Xmx3g",
+
     // Show full stack trace and duration in test cases.
     testOptions in Test += Tests.Argument("-oDF"),
     testOptions += Tests.Argument(TestFrameworks.JUnit, "-v", "-a"),
@@ -437,7 +439,7 @@ object TestSettings {
     // Parallelize execution of tests
     parallelExecution in Test := true,
     testForkedParallel in Test := false,
-    concurrentRestrictions in Test += Tags.limit(Tags.ForkedTestGroup, 8),
+    concurrentRestrictions in Test := Seq(Tags.limit(Tags.ForkedTestGroup, 8)),
 
     testGrouping in Test <<= (definedTests in Test, javaOptions in Test) map groupBySuite,
     testGrouping in Test := {
@@ -449,7 +451,7 @@ object TestSettings {
           javaHome = javaHome.value,
           connectInput = connectInput.value,
           outputStrategy = outputStrategy.value,
-          runJVMOptions = javaOptions.value,
+          runJVMOptions = (javaOptions in Test).value,
           // workingDirectory = Some(new File(System.getProperty("user.dir"))),
           workingDirectory = Some(baseDirectory.value),
           envVars = envVars.value
