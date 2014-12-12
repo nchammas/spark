@@ -439,7 +439,7 @@ object TestSettings {
     // Parallelize execution of tests
     parallelExecution in Test := true,
     testForkedParallel in Test := false,
-    concurrentRestrictions in Test := Seq(Tags.limit(Tags.ForkedTestGroup, 8)),
+    concurrentRestrictions in Global := Seq(Tags.limit(Tags.ForkedTestGroup, 8)),
 
     testGrouping in Test <<= (definedTests in Test, javaOptions in Test) map groupBySuite,
     testGrouping in Test := {
