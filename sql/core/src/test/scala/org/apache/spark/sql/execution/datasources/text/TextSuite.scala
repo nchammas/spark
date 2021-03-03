@@ -90,6 +90,15 @@ abstract class TextSuite extends QueryTest with SharedSparkSession with CommonFi
     assert(data.length == 1)
   }
 
+  test("SPARK-29280: Support for specifying the compression codec on read for text") {
+    println(testFileGzipWithBadExtension)
+    verifyFrame(
+      spark.read
+      .option("compression", "gzip")
+      .text(testFileGzipWithBadExtension)
+    )
+  }
+
   test("SPARK-13503 Support to specify the option for compression codec for TEXT") {
     val testDf = spark.read.text(testFile)
     val extensionNameMap = Map("bzip2" -> ".bz2", "deflate" -> ".deflate", "gzip" -> ".gz")
@@ -219,6 +228,11 @@ abstract class TextSuite extends QueryTest with SharedSparkSession with CommonFi
 
   private def testFile: String = {
     Thread.currentThread().getContextClassLoader.getResource("test-data/text-suite.txt").toString
+  }
+
+  private def testFileGzipWithBadExtension: String = {
+    Thread.currentThread().getContextClassLoader
+    .getResource("test-data/text-suite-gzip.bad-extension").toString
   }
 
   /** Verifies data and schema. */

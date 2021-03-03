@@ -102,6 +102,7 @@ class TextFileFormat extends TextBasedFileFormat with DataSourceRegister {
       requiredSchema.length <= 1,
       "Text data source only produces a single data column named \"value\".")
     val textOptions = new TextOptions(options)
+    println("################# buildReader #################")
     val broadcastedHadoopConf =
       sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 
@@ -115,6 +116,12 @@ class TextFileFormat extends TextBasedFileFormat with DataSourceRegister {
 
     (file: PartitionedFile) => {
       val confValue = conf.value.value
+      println("################# readToUnsafeMem #################")
+      println(textOptions.compressionCodec)
+      textOptions.compressionCodec.foreach { codec =>
+        println(codec)
+        CompressionCodecs.setCodecConfiguration(confValue, codec)
+      }
       val reader = if (!textOptions.wholeText) {
         new HadoopFileLinesReader(file, textOptions.lineSeparatorInRead, confValue)
       } else {
