@@ -56,6 +56,7 @@ jobs:
           FULL_SYNC: "true"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          debug: false
           retries: 3
           script: |
             const rate = async () =>
@@ -107,6 +108,7 @@ jobs:
           FULL_SYNC: "false"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          debug: false
           retries: 3
           script: |
             const assertFork = (params) => {
