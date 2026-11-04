@@ -1,0 +1,155 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+# Temporary fork-only test. Never merge this workflow into the real PR.
+# The production JavaScript module is unchanged; only its API client is wrapped.
+# Pause the fork's legacy scheduled updater while this test PR is open.
+
+name: Build Status (fork test)
+
+on:
+  push:
+    branches:
+    - build-status-fork-test
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  read-apache-spark:
+    name: Read apache/spark (writes simulated)
+    if: github.repository == 'nchammas/spark'
+    runs-on: ubuntu-slim
+    permissions:
+      actions: read
+      checks: write
+      contents: read
+      pull-requests: read
+      statuses: read
+    steps:
+      - name: Checkout build status script
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/workflows/update_build_status.js
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Read and simulate check updates
+        uses: actions/github-script@v9
+        env:
+          FULL_SYNC: "true"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          retries: 3
+          script: |
+            const rate = async () =>
+              (await github.rest.rateLimit.get()).data.resources.graphql
+            const before = await rate()
+            const graphql = (query, variables) => {
+              if (variables.owner !== 'apache' || variables.repo !== 'spark'
+                  || !/^\s*query\b/.test(query) || /\bmutation\b/.test(query)) {
+                throw new Error('Only read-only apache/spark queries are permitted')
+              }
+              return github.graphql(query, variables)
+            }
+            let writes = 0
+            const simulated = async (params) => {
+              writes++
+              return {data: {status: params.status, conclusion: params.conclusion}}
+            }
+            await require(process.env.GITHUB_WORKSPACE
+              + '/.github/workflows/update_build_status.js')({
+              github: {graphql, rest: {checks: {update: simulated, create: simulated}}},
+              context: {repo: {owner: 'apache', repo: 'spark'}},
+              core
+            })
+            const after = await rate()
+            core.info('Simulated check write requests: ' + writes)
+            core.info('GraphQL points used: ' + (after.used - before.used)
+              + ' of ' + after.limit + ' per hour')
+
+  update:
+    name: Update
+    if: github.repository == 'nchammas/spark'
+    runs-on: ubuntu-slim
+    permissions:
+      actions: read
+      checks: write
+      contents: read
+      pull-requests: read
+      statuses: read
+    steps:
+      - name: Checkout build status script
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/workflows/update_build_status.js
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Sync status updates
+        uses: actions/github-script@v9
+        env:
+          FULL_SYNC: "false"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          retries: 3
+          script: |
+            const assertFork = (params) => {
+              if (params.owner !== 'nchammas' || params.repo !== 'spark') {
+                throw new Error('Only nchammas/spark is permitted')
+              }
+            }
+            assertFork(context.repo)
+            if (context.ref !== 'refs/heads/build-status-fork-test') {
+              throw new Error('Only the disposable test branch is permitted')
+            }
+            const graphql = (query, variables) => {
+              assertFork(variables)
+              if (!/^\s*query\b/.test(query) || /\bmutation\b/.test(query)) {
+                throw new Error('GraphQL mutations are forbidden')
+              }
+              return github.graphql(query, variables)
+            }
+            let writes = 0
+            const create = async (params) => {
+              assertFork(params)
+              if (params.head_sha !== context.sha || params.name !== 'Build') {
+                throw new Error('Only the test commit Build check may be created')
+              }
+              writes++
+              return github.rest.checks.create(params)
+            }
+            const update = async (params) => {
+              assertFork(params)
+              const {data: check} = await github.rest.checks.get({
+                ...context.repo,
+                check_run_id: params.check_run_id
+              })
+              if (check.head_sha !== context.sha || check.name !== 'Build') {
+                throw new Error('Only the test commit Build check may be updated')
+              }
+              writes++
+              return github.rest.checks.update(params)
+            }
+            await require(process.env.GITHUB_WORKSPACE
+              + '/.github/workflows/update_build_status.js')({
+              github: {graphql, rest: {checks: {create, update}}},
+              context,
+              core
+            })
+            core.info('Real check write requests: ' + writes)

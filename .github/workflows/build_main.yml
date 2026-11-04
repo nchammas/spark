@@ -22,16 +22,16 @@ name: "Build"
 on:
   push:
     branches:
-    - '**'
+    - build-status-fork-test
+
+permissions: {}
 
 jobs:
-  call-build-and-test:
-    permissions:
-      packages: write
-    name: Run
-    # Skip pushes to `master` on forks: the "Sync fork" button mirrors
-    # apache/spark and would otherwise re-run the full build on every sync.
-    if: >-
-      github.repository == 'apache/spark'
-      || github.ref != 'refs/heads/master'
-    uses: ./.github/workflows/build_and_test.yml
+  fixture:
+    name: Fixture
+    if: github.repository == 'nchammas/spark'
+    runs-on: ubuntu-slim
+    timeout-minutes: 14
+    steps:
+      - name: Wait for the check synchronization test
+        run: sleep 720
